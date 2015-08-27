@@ -42,11 +42,13 @@ for s in seds:
         colors[f] = vmag - mag
         writestring += '%.3f ' %(colors[f])
     print writestring
-    plt.plot(colors['g'], colors['r'], linestyle='', marker='o', label='%s' %(sname))
+    plotPointColor = np.random.rand(3)
+    plt.plot(colors['g'], colors['r'], linestyle='', marker='o', color=plotPointColor, label='%s' %(sname))
+    pylab.annotate(sname, colors['g']+0.005, colors['r']+0.005, color=plotPointColor)
 
 plt.xlabel('V-g')
 plt.ylabel('V-r')
-plt.legend(fancybox=True, numpoints=1, fontsize='smaller')
+#plt.legend(fancybox=True, numpoints=1, fontsize='smaller')
 plt.show()
 
 
