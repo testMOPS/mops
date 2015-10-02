@@ -1,0 +1,127 @@
+I chose a PHA from the MPC, using a numbered object which should have a fairly secure orbit.
+
+The object I chose was 389694 (2011 QD48)
+I decided to try to generate ephemerides for today (2015/10/02).
+
+From astropy (used in convertTimes.py in this repo), I calculate this 'time' in various timescales for reference
+Converting 57297.000000 / mjd / utc to other timescales.
+UTC: 2015-10-02 00:00:00.000
+UTC: 2457297.500000 57297.000000
+TT: 2457297.500789 57297.000789
+TAI: 2457297.500417 57297.000417
+TDB: 2457297.500789 57297.000789
+
+and because sometime services would only accept round numbers but turned it into TT:
+Converting 57297.000000 / mjd / tt to other timescales.
+UTC: 2015-10-01 23:58:51.816
+UTC: 2457297.499211 57296.999211
+TT: 2457297.500000 57297.000000
+TAI: 2457297.499627 57296.999628
+TDB: 2457297.500000 57297.000000
+and also:
+MJD = JD - 2400000.5
+
+============
+
+The MPC will generate an ephemeris and provide orbital elements for 2015/10/02 via the ephemeris page:
+ephemeris:
+c9694              [H=18.1]
+Date       UT      R.A. (J2000) Decl.    Delta     r     El.    Ph.   V     Coord Motion       Object    Sun   Moon                Uncertainty info
+            h m s                                                            °/day   °/day    Azi. Alt.  Alt.  Phase Dist. Alt.    3-sig/" P.A.
+2015 10 02 000000   01.1127  +32.922     0.229   1.203  149.2  25.2  16.5   -0.92    +1.80    235  -06   -17   0.80   043  -35       N/A   N/A / Map / Offsets
+(Apparently - even when you request the RA/Dec in decimal units, the MPC is currently reporting the RA in hours:
+so 01.1127 = 16.6905 degrees)
+
+with orbit:
+Epoch (TT/JD) T (TT/JD)         Peri.     Node      Incl.       e             q             a      Epoch (TT)
+2457297.50000 2457371.7368570 106.67930 358.89665  19.06742 0.4921538     0.7848283      1.54541  2015/10/02.00
+(interesting how when you requets elements at an epoch on the MPC page, you have to specify a date in iso format and can only specify the day). 
+
+Translating this to a line that oorb would like for cometary elements: (TT timescale but MJDs not JDs)
+!!OID FORMAT q e i node argperi t_p H t_0 INDEX N_PAR MOID COMPCODE
+389694 COM 0.7848283 0.4921538 19.06742 358.89665 106.67930 57371.236857 18.2 57297.000000 1 6 1 MPC
+
+And then OORB produced:
+% oorb --task=ephemeris --orb-in=test_mpc.des --code=807 | awk '{print $1, $3, $5, $6, $7, $8, $10, $4, $7}'
+#Designation MJD_UTC/UT1 RA Dec dDelta/dt dRA/dt VMag Delta dDelta/dt
+389694 57296.9992108333 16.6916377471 32.9201695090 -0.0069334452 -0.7696779775 16.5604185127 0.2288755792 -0.0069334452
+
+So this is 68 seconds earlier than the MPC ephemeris.
+Must propagate oorb orbit forward for one minute:
+% oorb --task=propagation --orb-in=test_mpc.des --orb-out=test_mpc_2.des --epoch-mjd-utc=57297.000000
+% oorb --task=ephemeris --orb-in=test_mpc_2.des --code=807 | awk '{print $1, $3, $5, $6, $8, $9, $10, $4, $7}'
+#Designation MJD_UTC/UT1 RA Dec dRA/dt dDec/dt VMag Delta dDelta/dt
+389694 57297.0000000000 16.6909141095 32.9215893314 -0.7700138016 1.7990411164 16.5603755966 0.2288701077 -0.0069329715
+
+oorb - MPC:  Difference of 1.49" in RA, 1.48" in Dec. (0.0002 AU in delta.)
+
+==========
+
+Horizons will also generate an ephemeris and provide orbital elements for 2015/10/02 via the webpages.
+
+******************************************************************************************************************************************
+Date_________JDUT     R.A._(J2000.0)_DEC. dRA*cosD d(DEC)/dt  APmag            delta      deldot    S-O-T /r    S-T-O RA_3sigma DEC_3sigma
+******************************************************************************************************************************************
+2457297.500000000 A    16.69086  32.92155 -115.313  269.9354  16.56 0.22887017957820 -12.0040955 149.1514 /L  25.2536     0.301      0.306
+
+2457297.500000000 = A.D. 2015-Oct-02 00:00:00.0000 (CT)
+ EC= 4.921538386137744E-01 QR= 7.848282272664320E-01 IN= 1.906743620425684E+01
+ OM= 3.588966669803730E+02 W = 1.066792991075712E+02 Tp=  2457371.736880499404
+ N = 5.130272257941398E-01 MA= 3.219144591458941E+02 TA= 2.668801754210577E+02
+ A = 1.545405453344674E+00 AD= 2.305982679422915E+00 PR= 7.017171446266589E+02
+
+# Note: I assumed "coordinate time" was TT (the epoch was labelled as 'coordinate time')
+# also I assumed that Tp from Horizons was in TT (not labelled)
+
+Translating this orbit to oorb format:
+!!OID FORMAT q e i node argperi t_p H t_0 INDEX N_PAR MOID COMPCODE
+389694 COM 7.848282272664320E-01 4.921538386137744E-01 1.906743620425684E+01 3.588966669803730E+02 1.066792991075712E+02 57371.236880499 18.200000 57297.000789 1 6 1 HORIZONS
+
+Doing the same as above:
+% oorb --task=propagation --orb-in=test_jpl.des --orb-out=test_jpl_2.des --epoch-mjd-utc=57297.000000
+% oorb --task=ephemeris --orb-in=test_jpl_2.des --code=807 | awk '{print $1, $3, $5, $6, $8, $9, $10, $4, $7}'
+#Designation MJD_UTC/UT1 RA Dec dRA/dt dDec/dt VMag Delta dDelta/dt
+389694 57297.0000000000 16.6908697546 32.9215378589 -0.7700165316 1.7990390277 16.5603752049 0.2288701943 -0.0069329738
+
+oorb - Horizons: Difference of 0.03" in RA, 0.04" in Dec. (super small delta difference).
+
+========
+
+Use horizons to generate a set of cometary orbital elements from ten years earlier:
+
+2453645.500000000 = A.D. 2005-Oct-02 00:00:00.0000 (CT)
+ EC= 4.921563013560958E-01 QR= 7.847163798437903E-01 IN= 1.906064824393883E+01
+ OM= 3.590186205111589E+02 W = 1.065326884835588E+02 Tp=  2453863.572011837270
+ N = 5.131331815261347E-01 MA= 2.481000147641282E+02 TA= 2.087004973016340E+02
+ A = 1.545192707794188E+00 AD= 2.305669035744587E+00 PR= 7.015722486105969E+02
+
+Again translate to Oorb:
+% python translateJPL_OORB.py jpl 389694 18.2 > test_jpl_5.des
+% oorb --task=propagation --orb-in=test_jpl_5.des --orb-out=test_jpl_5_2.des --epoch-mjd-utc=57297.000000
+% oorb --task=ephemeris --orb-in=test_jpl_5_2.des --code=807 | awk '{print $1, $3, $5, $6, $8, $9, $10, $4, $7}'
+#Designation MJD_UTC/UT1 RA Dec dRA/dt dDec/dt VMag Delta dDelta/dt
+389694 57297.0000000000 16.6908499112 32.9215167301 -0.7700174030 1.7990379505 16.5603748707 0.2288702142 -0.0069329744
+
+oorb - Horizons after propagating for 10 years: Difference of 0.07" in RA, 0.07" in Dec.
+
+=== 
+
+And grab another set of orbital elements from twenty years earlier:
+2449992.500000000 = A.D. 1995-Oct-02 00:00:00.0000 (CT)
+ EC= 4.923831359293364E-01 QR= 7.843472039897521E-01 IN= 1.905218258612128E+01
+ OM= 3.590994460100811E+02 W = 1.064407101432093E+02 Tp=  2449654.187963512726
+ N = 5.131515056536409E-01 MA= 1.736053309042933E+02 TA= 1.774994652904236E+02
+ A = 1.545155922716874E+00 AD= 2.305964641443996E+00 PR= 7.015471961666371E+02
+
+!!OID FORMAT q e i node argperi t_p H t_0 INDEX N_PAR MOID COMPCODE
+389694 COM 7.843472039897521E-01 4.923831359293364E-01 1.905218258612128E+01 3.590994460100811E+02 1.064407101432093E+02 49653.687963513 18.200000 49992.000708148 1 6 1 HORIZONS
+
+and generate ephemeris:
+% oorb --task=propagation --orb-in=test_jpl_20.des --orb-out=test_jpl_20_2.des --epoch-mjd-utc=57297.000000
+% oorb --task=ephemeris --orb-in=test_jpl_20_2.des --code=807 | awk '{print $1, $3, $5, $6, $8, $9, $10, $4, $7}'
+#Designation MJD_UTC/UT1 RA Dec dRA/dt dDec/dt VMag Delta dDelta/dt
+389694 57297.0000000000 16.6911096466 32.9217159323 -0.7700062919 1.7990482130 16.5603792059 0.2288701006 -0.0069329737
+
+oorb - Horizons after propagating for 20 years: Difference of  0.9" in RA, 0.6" in Dec.
+
+
