@@ -124,4 +124,7 @@ and generate ephemeris:
 
 oorb - Horizons after propagating for 20 years: Difference of  0.9" in RA, 0.6" in Dec.
 
-
+Using python bindings with same jpl_20.des input file:
+MJD(UTC)    RA    Dec   Delta
+57297.0 16.6911096458 32.9217159317 0.228870100609
+Difference:  this is the same as the command line version (which can also be verified using the test_2.py script in the python bindings directory in oorb).
