@@ -85,6 +85,20 @@ Doing the same as above:
 
 oorb - Horizons: Difference of 0.03" in RA, 0.04" in Dec. (super small delta difference).
 
+HORIZONS will also provide positions that include apparent geocentric effects (yearly aberration, precession, nutation) and observer effects (diurnal aberration, refraction):
+**************************************************************************************************************************************************************
+Date_________JDUT     R.A._(J2000.0)_DEC. R.A._(r-appar)_DEC. dRA*cosD d(DEC)/dt  APmag            delta      deldot    S-O-T /r    S-T-O RA_3sigma DEC_3sigma
+**************************************************************************************************************************************************************
+2457297.500000000 A    16.69085  32.92155  16.26449  32.66293 -115.313  269.9354  16.56 0.22887018410422 -12.0040934 149.1514 /L  25.2536     0.211      0.199
+
+and you can turn off refraction (with refraction the difference is very large!).
+**************************************************************************************************************************************************************
+Date_________JDUT     R.A._(J2000.0)_DEC. R.A._(a-appar)_DEC. dRA*cosD d(DEC)/dt  APmag            delta      deldot    S-O-T /r    S-T-O RA_3sigma DEC_3sigma
+**************************************************************************************************************************************************************
+2457297.500000000 A    16.69085  32.92155  16.91664  33.00621 -115.313  269.9354  16.56 0.22887018410422 -12.0040934 149.1514 /L  25.2536     0.211      0.199
+
+Even without refraction: this is too large. (812" in RA, 304") With refraction, it's 1534" (25') in RA.
+
 ========
 
 Use horizons to generate a set of cometary orbital elements from ten years earlier:
