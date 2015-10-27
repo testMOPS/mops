@@ -6,8 +6,10 @@ from lsst.sims.catUtils.utils import ObservationMetaDataGenerator
 from lsst.sims.photUtils import PhotometricParameters
 # SSM catalog modules
 from lsst.sims.catUtils.baseCatalogModels import SolarSystemObj, CometObj, MBAObj, NEOObj, MiscSolarSystemObj
-from lsst.sims.catUtils.mixins import PhotometrySSM, AstrometrySSM
+from lsst.sims.catUtils.mixins import PhotometrySSM, AstrometrySSM, CameraCoords, ObsMetadataBase
 from lsst.sims.catalogs.measures.instance import InstanceCatalog
+# For camera.
+from lsst.obs.lsstSim import LsstSimMapper
 
 import time
 def dtime(time_prev):
@@ -15,16 +17,23 @@ def dtime(time_prev):
 
 # Build sso instance class
 
+basic_columns = ['objid', 'obs_mjd', 'raJ2000', 'decJ2000', 'velRa', 'velDec', 'skyVelocity', 'dist', 'dmagTrailing', 'dmagDetection',
+                 'sedFilename', 'magFilter', 'obs_seeing', 'obs_bandpass', 'obs_visitExpTime']
 
-class ssmCat(InstanceCatalog, PhotometrySSM, AstrometrySSM):
-    column_outputs = ['objid', 'raJ2000', 'decJ2000', 'sedFilename',
-                      'velRa', 'velDec', 'skyVelocity', 'raObserved', 'decObserved',
-                      'lsst_u' ,'lsst_g', 'lsst_r', 'lsst_i', 'lsst_z', 'lsst_y',
-                      'dmagTrailing', 'dmagDetection']
-
+class ssmCat(InstanceCatalog, PhotometrySSM, AstrometrySSM, ObsMetadataBase, CameraCoords):
+    column_outputs = basic_columns
     transformations = {'raJ2000': np.degrees, 'decJ2000': np.degrees,
                        'velRa': np.degrees, 'velDec': np.degrees}
+    default_formats = {'f':'%.13f'}
 
+
+class ssmCatCamera(ssmCat):
+    column_outputs = basic_columns + ['chipName']
+    camera = LsstSimMapper().camera
+    cannot_be_null = ['chipName']
+    transformations = {'raJ2000': np.degrees, 'decJ2000': np.degrees,
+                       'velRa': np.degrees, 'velDec': np.degrees}
+    default_formats = {'f':'%.13f'}
 
 ######
 
@@ -32,29 +41,29 @@ t = time.time()
 # Get opsim data.
 opsdb = '/Users/lynnej/opsim/db/enigma_1189_sqlite.db'
 generator = ObservationMetaDataGenerator(database=opsdb, driver='sqlite')
-obsMetaDataResults = generator.getObservationMetaData(expMJD=(50100.031278, 50100.375172), limit=3, boundLength=2.2)
-# Need to get exptime above, and move exptime into photParams.
-photParams = PhotometricParameters()
+obsMetaDataResults = generator.getObservationMetaData(expMJD=(50100.031278, 50100.375172), boundLength=2.2)
 
 dt, t = dtime(t)
 print 'To query opsim database: %f seconds' %(dt)
 
+write_header = True
+write_mode = 'w'
+
+ssmObj = NEOObj()
+
 for obs in obsMetaDataResults:
-    print obs.mjd, obs.unrefractedRA, obs.unrefractedDec, obs.bandpass, obs.boundType, obs.boundLength
-    """
-    mySsmDb = NEOObj()
-    chunk = mySsmDb.query_columns(obs_metadata=obs)
-    for c in chunk:
-        print c
-        print c.dtype
-    """
-    mySsmDb = ssmCat(NEOObj(), obs_metadata = obs)
-    #for row in mySsmDb.iter_catalog():
-    #    print row
-    mySsmDb.write_catalog('test')
+    #print obs.mjd, obs.unrefractedRA, obs.unrefractedDec, obs.bandpass, obs.boundType, obs.boundLength
+
+    mySsmDb = ssmCat(ssmObj, obs_metadata = obs)
+    photParams = PhotometricParameters(exptime = obs.phoSimMetaData['exptime'][0], nexp=1, bandpass=obs.bandpass)
+    mySsmDb.photParams = photParams
+    
+    mySsmDb.write_catalog('catsim_n747', write_header=write_header, write_mode=write_mode)
+    write_mode = 'a'
+    write_header = False
 
     dt, t = dtime(t)
-    print 'To query solar system objects: %f seconds' %(dt)
+    print 'To query solar system objects: %f seconds (obs time %f)' %(dt, obs.mjd)
 
 
 
