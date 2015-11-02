@@ -17,8 +17,8 @@ def dtime(time_prev):
 
 # Build sso instance class
 
-basic_columns = ['objid', 'obs_mjd', 'raJ2000', 'decJ2000', 'velRa', 'velDec', 'skyVelocity', 'dist', 'dmagTrailing', 'dmagDetection',
-                 'sedFilename', 'magFilter', 'obs_seeing', 'obs_bandpass', 'obs_visitExpTime']
+basic_columns = ['objid', 'expMJD', 'raJ2000', 'decJ2000', 'velRa', 'velDec', 'skyVelocity', 'dist', 'dmagTrailing', 'dmagDetection',
+                 'sedFilename', 'magFilter', 'SNR', 'visibility', 'seeing', 'bandpass', 'visitExpTime']
 
 class ssmCat(InstanceCatalog, PhotometrySSM, AstrometrySSM, ObsMetadataBase, CameraCoords):
     column_outputs = basic_columns
@@ -41,7 +41,7 @@ t = time.time()
 # Get opsim data.
 opsdb = '/Users/lynnej/opsim/db/enigma_1189_sqlite.db'
 generator = ObservationMetaDataGenerator(database=opsdb, driver='sqlite')
-obsMetaDataResults = generator.getObservationMetaData(expMJD=(50100.031278, 50100.375172), boundLength=2.2)
+obsMetaDataResults = generator.getObservationMetaData(expMJD=(50100.03126, 50100.37518), boundLength=2.2)
 
 dt, t = dtime(t)
 print 'To query opsim database: %f seconds' %(dt)
@@ -54,7 +54,8 @@ ssmObj = NEOObj()
 for obs in obsMetaDataResults:
     #print obs.mjd, obs.unrefractedRA, obs.unrefractedDec, obs.bandpass, obs.boundType, obs.boundLength
 
-    mySsmDb = ssmCat(ssmObj, obs_metadata = obs)
+    mySsmDb = ssmCatCamera(ssmObj, obs_metadata = obs)
+    #mySsmDb = ssmCat(ssmObj, obs_metadata = obs)
     photParams = PhotometricParameters(exptime = obs.phoSimMetaData['exptime'][0], nexp=1, bandpass=obs.bandpass)
     mySsmDb.photParams = photParams
     
