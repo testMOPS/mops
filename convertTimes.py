@@ -22,6 +22,7 @@ print "Converting %f / %s / %s to other timescales." %(yourtime, yourformat, you
 t = Time(yourtime, format=yourformat, scale=yourtimescale)
 
 print 'UTC: %s' %(t.utc.iso)
+print 'TT ISO: %s' %(t.tt.iso)
 print 'UTC: %f %f' %(t.utc.jd, t.utc.mjd)
 print 'TT: %f %f' %(t.tt.jd, t.tt.mjd)
 print 'TAI: %f %f' %(t.tai.jd, t.tai.mjd)

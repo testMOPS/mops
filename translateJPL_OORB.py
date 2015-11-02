@@ -25,7 +25,7 @@ else:
 
 # line 0
 epoch = float(lines[0].split()[0])
-oorb_epoch = Time(epoch, format='jd', scale='utc')
+oorb_epoch = Time(epoch, format='jd', scale='tt')
 
 # line 1
 l = lines[1].split()
