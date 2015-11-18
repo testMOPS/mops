@@ -1,3 +1,4 @@
+import os
 import argparse
 import numpy as np
 from itertools import repeat
@@ -101,13 +102,16 @@ if __name__=="__main__":
     oorbArray = pack_oorbArray(orbits)
 
     # Set up oorb.
-    oo.pyoorb.oorb_init(ephemeris_fname="")
+    ephfile = os.path.join(os.getenv('OORB_DATA'), 'de430.dat')
+    oo.pyoorb.oorb_init(ephemeris_fname=ephfile)
 
     # set observatory code
     obscode = args.obsCode
 
     # Set up dates to predict ephemerides.
     times = np.array(args.ephTimes.split(), float)
+    obshistids = np.arange(0, len(times))
+    print "Using times: ", times
     # For pyoorb, we need to tag times with timescales;
     # 1= MJD_UTC, 2=UT1, 3=TT, 4=TAI
     ephTimes = np.array(zip(times, repeat(1, len(times))), dtype='double')
@@ -125,10 +129,13 @@ if __name__=="__main__":
     # Swap the order of the axes: DATE / Objs / values
 
     # Unpack ephemerides.
-    ephs = unpackOorbEphs(oorbephs)
-
+    ephs = unpackOorbEphs(oorbephs, byObject=True)
 
     # print results?
-    print 'MJD(UTC)    RA    Dec   Delta'
-    for e in ephs:
-        print e['time'][0], e['ra'][0], e['dec'][0], e['delta'][0]
+    print 'Objid ObshistId MJD(UTC)    RA    Dec   MJD_UTC MagV FakeSNR'
+    diacounter = 0
+    for j, o in orbits.iterrows():
+        for i, obshist in enumerate(obshistids):
+            print o.objid, obshist, diacounter, ephs['ra'][j][i], ephs['dec'][j][i], ephs['time'][j][i], ephs['magV'][j][i], 5
+            diacounter += 1
+
