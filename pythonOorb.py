@@ -88,6 +88,7 @@ if __name__=="__main__":
     parser = argparse.ArgumentParser(description='Python script to generate ephemerides using oorb')
     parser.add_argument('--orbitFile', type=str, default=None, help='Input orbit file (.des COMETARY format)')
     parser.add_argument('--obsCode', type=int, default=807, help='Observatory code for ephemerides')
+    parser.add_argument('--ephTimesFile', type=str, default=None, help='Filename containing MJD-UTC times for ephemerides')
     parser.add_argument('--ephTimes', type=str, default=None, help='List of MJD-UTC times for ephemerides (if >1: in quotes, separated by spaces')
     parser.set_defaults()
     args = parser.parse_args()
@@ -109,12 +110,21 @@ if __name__=="__main__":
     obscode = args.obsCode
 
     # Set up dates to predict ephemerides.
-    times = np.array(args.ephTimes.split(), float)
-    obshistids = np.arange(0, len(times))
-    print "Using times: ", times
-    # For pyoorb, we need to tag times with timescales;
-    # 1= MJD_UTC, 2=UT1, 3=TT, 4=TAI
-    ephTimes = np.array(zip(times, repeat(1, len(times))), dtype='double')
+    if args.ephTimes is not None:
+        times = np.array(args.ephTimes.split(), float)
+        obshistids = np.arange(0, len(times))
+        # For pyoorb, we need to tag times with timescales;
+        # 1= MJD_UTC, 2=UT1, 3=TT, 4=TAI
+        ephTimes = np.array(zip(times, repeat(1, len(times))), dtype='double')
+
+    elif args.ephTimesFile is not None:
+        times = pd.read_table(args.ephTimesFile, sep='\s*', engine='python', names=['MJD-UTC'])
+        ephTimes = np.array(zip(times['MJD-UTC'].as_matrix(), repeat(1, len(times))), dtype='double')
+
+    else:
+        raise Exception('Did not have any ephemeride times')
+
+    print "Using times: ", ephTimes[0]
 
     # Generate ephemerides.
     oorbephs, err = oo.pyoorb.oorb_ephemeris(in_orbits = oorbArray, in_obscode=obscode, in_date_ephems=ephTimes)
@@ -132,10 +142,11 @@ if __name__=="__main__":
     ephs = unpackOorbEphs(oorbephs, byObject=True)
 
     # print results?
-    print 'Objid ObshistId MJD(UTC)    RA    Dec   MJD_UTC MagV FakeSNR'
+    print 'DiaID ObshistId ObjID MJD(UTC)    RA    Dec   MJD_UTC MagV FakeSNR'
     diacounter = 0
     for j, o in orbits.iterrows():
+        obshistids = np.arange(0, len(ephTimes))
         for i, obshist in enumerate(obshistids):
-            print o.objid, obshist, diacounter, ephs['ra'][j][i], ephs['dec'][j][i], ephs['time'][j][i], ephs['magV'][j][i], 5
+            print diacounter, obshist, o.objid, ephs['ra'][j][i], ephs['dec'][j][i], ephs['time'][j][i], ephs['magV'][j][i], 5
             diacounter += 1
 
