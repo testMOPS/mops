@@ -8,7 +8,8 @@ from astropy.time import Time
 
 if len(sys.argv) < 4:
     print "usage: python convertTimes.py YourTime YourFormat YourTimeScale"
-    print " YourFormat ought to be in JD or MJD"
+    print " YourFormat ought to be in jd or mjd"
+    print " YourTimeScale is something like utc, tai, tt, ut1"
     print " outputs: your time in many other timescales"
     exit()
 
