@@ -103,7 +103,7 @@ if __name__=="__main__":
     oorbArray = pack_oorbArray(orbits)
 
     # Set up oorb.
-    ephfile = os.path.join(os.getenv('OORB_DATA'), 'de430.dat')
+    ephfile = os.path.join(os.getenv('OORB_DATA'), 'de405.dat')
     oo.pyoorb.oorb_init(ephemeris_fname=ephfile)
 
     # set observatory code
