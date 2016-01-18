@@ -1,4 +1,7 @@
+import os
 import numpy as np
+import matplotlib.pyplot as plt
+from itertools import repeat
 import pandas as pd
 import pyoorb as oo
 
@@ -23,8 +26,12 @@ def pack_oorbArray(orbits):
     epoch_type = np.zeros(len(orbits)) + 3
     gval = np.zeros(len(orbits)) + 0.15
     # Also, the orbitID has to be a float, rather than a string, so substitute if needed.
-    if ((isinstance(orbits['objid'][0], float) == True) |
-        (isinstance(orbits['objid'][0], int) == True)):
+    try:
+        test_objid = orbits['objid'][0]
+    except KeyError:
+        test_objid = orbits.objid.head(1)
+    if ((isinstance(test_objid, float) == True) |
+        (isinstance(test_objid, int) == True)):
         orbids = orbits['objid']
     else:
         orbids = np.arange(0, len(orbits['objid']), 1)
@@ -97,19 +104,21 @@ def transform_to_V(filterMags, filters):
         magV[match] = filterMags[match] - transform[f]
     return magV
 
-
 def read_orbits(orbitfile='../S0'):
-    # Read orbits.
+    # Read NEO orbit file
     orbits = pd.read_table(orbitfile, delim_whitespace=True, skiprows=1)
     newcols = orbits.columns.values
     newcols[0] = 'objid'
     orbits.columns = newcols
     return orbits
 
-def trim_orbits(orbits, jpl_objids):
-    uniqueObj = jpl_objids.unique()
+def trim_orbits(orbits, jpl):
+    uniqueObj = jpl.objid.unique()
     orbMatch = orbits.query('objid in @uniqueObj')
-    return orbMatch
+    # Hack to remove objects in JPL list which are not in ours.
+    # Not needed anymore really, but can stay in here as a check.
+    jplMatch = jpl.query('objid in @orbMatch.objid')
+    return orbMatch, jplMatch
 
 
 
@@ -124,17 +133,66 @@ if __name__ == '__main__':
 
     # read neo orbits
     orbits = read_orbits('../S0')
-    orbits = trim_orbits(orbits, jpl.objids)
-    # predict neo positions at all times in jpl (more than we need)
-    oorbits = pack_oorbArray(orbits)
+    orbits, jpl = trim_orbits(orbits, jpl)
+
+    # predict neo positions at all times in jpl
+
     times = jpl.epoch_mjd.unique()
     # For pyoorb, we need to tag times with timescales;
     # 1= MJD_UTC, 2=UT1, 3=TT, 4=TAI
     ephTimes = np.array(zip(times, repeat(1, len(times))), dtype='double')
     # Generate ephemerides.
+    setup_oorb()
     obscode = 807
+    oorbits = pack_oorbArray(orbits)
     oorbephs, err = oo.pyoorb.oorb_ephemeris(in_orbits = oorbits, in_obscode=obscode, in_date_ephems=ephTimes)
-    ephs = unpackOorbEphs(oorbephems, byObject=False)
-    ephs = pd.DataFrame(ephs)
+    ephs = unpackOorbEphs(oorbephs, byObject=False)
+    # For each time, pull out the objects which were actually in the jpl data.
+    radiff = []
+    decdiff = []
+    magdiff = []
+    for ephi, time in zip(ephs, times):
+        print time
+        e = pd.DataFrame(ephi)
+        e['objid'] = orbits.objid.as_matrix()
+        j = jpl.query('epoch_mjd == @time').sort_values('objid')
+        e = e.query('objid in @j.objid').sort_values('objid')
+        radiff += list(e.ra.as_matrix() - j.ra_deg.as_matrix())
+        decdiff += list(e.dec.as_matrix() - j.dec_deg.as_matrix())
+        magdiff += list(e.magV.as_matrix() - j.magV.as_matrix())
+    radiff = np.array(radiff).ravel()
+    decdiff = np.array(decdiff).ravel()
+    magdiff = np.array(magdiff).ravel()
+    print radiff.shape
+    print decdiff.shape
 
+    f = open('offsets.txt', 'w')
+    for dra, ddec, dmag in zip(radiff, decdiff, magdiff):
+        print >>f, dra, ddec, dmag
+    f.close()
+
+    print np.min(radiff)
+
+    print 'ra difference min/max (deg)', np.min(radiff), np.max(radiff)
+    print 'dec difference min/max (deg)', np.min(decdiff), np.max(decdiff)
+    print 'Vmag difference min/max', np.min(magdiff), np.max(magdiff)
+
+    plt.figure()
+    plt.plot(radiff, decdiff, 'k.')
+    plt.xlabel('RA offsets (deg)')
+    plt.ylabel('Dec offsets (deg)')
+
+    plt.figure()
+    plt.hist(radiff, bins=150)
+    plt.xlabel('RA offset (deg)')
+
+    plt.figure()
+    plt.hist(decdiff, bins=150)
+    plt.xlabel('Dec offset (deg)')
+
+    plt.figure()
+    plt.hist(magdiff, bins=150)
+    plt.xlabel('Mag offset')
+
+    plt.show()
     
