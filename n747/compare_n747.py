@@ -4,7 +4,9 @@ import matplotlib.pyplot as plt
 from itertools import repeat
 import pandas as pd
 import pyoorb as oo
-
+from sqlalchemy.engine import url
+from sqlalchemy import create_engine
+from astropy.time import Time
 
 def setup_oorb():
     # Set up oorb.
@@ -80,14 +82,32 @@ def unpackOorbEphs(oorbephems, byObject=True):
                                      'ddecdt', 'phase', 'solarelon','velocity'])
     return ephs
 
+def addTrailingLosses(velocity, seeing, texp=30.0):
+    """
+    Calculate the magnitude losses due to trailing and not matching the point-source detection filter.
+    Velocity in deg/day, seeing in arcsec, texp in seconds.
+    """
+    a_trail = 0.76
+    b_trail = 1.16
+    a_det = 0.42
+    b_det = 0.00
+    x = velocity * texp / seeing / 24.0
+    dmagTrail = 1.25 * np.log10(1 + a_trail*x**2/(1+b_trail*x))
+    dmagDetect = 1.25 * np.log10(1 + a_det*x**2 / (1+b_det*x))
+    return dmagTrail, dmagDetect
+
+
 def read_JPL_dets(filename='n747_dets_new.txt'):
     jpl = pd.read_table(filename, delim_whitespace=True)
     newcols = jpl.columns.values
     newcols[0] = 'objid'
     jpl.columns = newcols
+    t = Time(jpl['epoch_mjd'], format='mjd', scale='tai')
+    jpl['mjdTAI'] = t.tai.mjd
+    jpl['mjdUTC'] = t.utc.mjd
     return jpl
 
-def transform_to_V(filterMags, filters):
+def transform_to_S(magV, filters):
     # S colors filter transformation (V to filter) that Peter used.
     # https://github.com/testMOPS/mops/commit/1e50ee9a90124107df61c0f2df695c03f4266882
     transform = {'u':-1.77,
@@ -97,14 +117,14 @@ def transform_to_V(filterMags, filters):
                 'z':0.349,
                 'y':0.354,
                 'w':0.16}
-    magV = np.zeros(len(filterMags), float)
+    magFilter = np.zeros(len(magV), float)
     filterlist = np.unique(filters)
     for f in filterlist:
         match = np.where(filters == f)
-        magV[match] = filterMags[match] - transform[f]
-    return magV
+        magFilter[match] = magV[match] - transform[f]
+    return magFilter
 
-def read_orbits(orbitfile='../S0'):
+def read_orbits(orbitfile='S0_n747.des'):
     # Read NEO orbit file
     orbits = pd.read_table(orbitfile, delim_whitespace=True, skiprows=1)
     newcols = orbits.columns.values
@@ -120,27 +140,36 @@ def trim_orbits(orbits, jpl):
     jplMatch = jpl.query('objid in @orbMatch.objid')
     return orbMatch, jplMatch
 
-
+def read_opsim(opsimfile='enigma_1189_sqlite.db'):
+    engine = create_engine('sqlite:///%s' % opsimfile)
+    query = 'select distinct(expmjd), finSeeing, filter from summary where night=747'
+    opsim = pd.read_sql(query, engine)
+    # opsim time TAI, add UTC
+    t = Time(opsim['expMJD'], format='mjd', scale='utc')
+    opsim['mjdTAI'] = t.tai.mjd
+    opsim['mjdUTC'] = t.utc.mjd
+    return opsim
 
 if __name__ == '__main__':
 
     # read jpl data.
     jpl = read_JPL_dets('n747_dets_new.txt')
-    # add V mags to JPL data.
-    magV = transform_to_V(jpl['mag'].as_matrix(), jpl['filter_id'].as_matrix())
-    jpl['magV'] = magV
-
+    # JPL times seem to be TAI, if we assume opsim times are UTC
+    # (really opsim should be TAI, and JPL should be TAI, but they don't match)
 
     # read neo orbits
     orbits = read_orbits('../S0')
     orbits, jpl = trim_orbits(orbits, jpl)
+    #orbits.to_csv('S0_trimmed.des', sep=' ', index=False)
 
     # predict neo positions at all times in jpl
+    opsim = read_opsim()
 
-    times = jpl.epoch_mjd.unique()
+    times = jpl.mjdTAI.unique()
+    #times = np.array([54466.000000000000 , 54466.000000000000 +1])
     # For pyoorb, we need to tag times with timescales;
     # 1= MJD_UTC, 2=UT1, 3=TT, 4=TAI
-    ephTimes = np.array(zip(times, repeat(1, len(times))), dtype='double')
+    ephTimes = np.array(zip(times, repeat(3, len(times))), dtype='double')
     # Generate ephemerides.
     setup_oorb()
     obscode = 807
@@ -152,43 +181,50 @@ if __name__ == '__main__':
     decdiff = []
     magdiff = []
     for ephi, time in zip(ephs, times):
-        print time
         e = pd.DataFrame(ephi)
         e['objid'] = orbits.objid.as_matrix()
-        j = jpl.query('epoch_mjd == @time').sort_values('objid')
+        j = jpl.query('mjdTAI == @time').sort_values('objid')
         e = e.query('objid in @j.objid').sort_values('objid')
+        o = opsim.query('abs(mjdTAI - @time) < 0.000001')
+        #print len(o)
+        #print time, opsim.iloc[0]
+        dmagTrail, dmagDetect = addTrailingLosses(e['velocity'].as_matrix(),
+                                                  o['finSeeing'].as_matrix(), texp=30.0)
+        e['mag'] = transform_to_S(e['magV'].as_matrix(), j['filter_id'].as_matrix()) + dmagDetect
         radiff += list(e.ra.as_matrix() - j.ra_deg.as_matrix())
         decdiff += list(e.dec.as_matrix() - j.dec_deg.as_matrix())
-        magdiff += list(e.magV.as_matrix() - j.magV.as_matrix())
-    radiff = np.array(radiff).ravel()
-    decdiff = np.array(decdiff).ravel()
+        magdiff += list(e.mag.as_matrix() - j.mag.as_matrix())
+    radiff = np.array(radiff).ravel()*3600
+    decdiff = np.array(decdiff).ravel()*3600
     magdiff = np.array(magdiff).ravel()
     print radiff.shape
     print decdiff.shape
 
-    f = open('offsets.txt', 'w')
-    for dra, ddec, dmag in zip(radiff, decdiff, magdiff):
-        print >>f, dra, ddec, dmag
-    f.close()
+    outfile = open('offsets.txt', 'w')
+    for dra, ddec, dmag, objid, time, f in zip(radiff, decdiff, magdiff,
+                                            jpl['objid'].as_matrix(), jpl['epoch_mjd'].as_matrix(),
+                                            jpl['filter_id'].as_matrix()):
+        print >>outfile, dra, ddec, dmag, objid, time, f
+    outfile.close()
 
     print np.min(radiff)
 
-    print 'ra difference min/max (deg)', np.min(radiff), np.max(radiff)
-    print 'dec difference min/max (deg)', np.min(decdiff), np.max(decdiff)
+    print 'ra difference min/max (arcsec)', np.min(radiff), np.max(radiff)
+    print 'dec difference min/max (arcsec)', np.min(decdiff), np.max(decdiff)
     print 'Vmag difference min/max', np.min(magdiff), np.max(magdiff)
 
     plt.figure()
     plt.plot(radiff, decdiff, 'k.')
-    plt.xlabel('RA offsets (deg)')
-    plt.ylabel('Dec offsets (deg)')
+    plt.xlabel('RA offsets (arcsec)')
+    plt.ylabel('Dec offsets (arcsec)')
 
     plt.figure()
     plt.hist(radiff, bins=150)
-    plt.xlabel('RA offset (deg)')
+    plt.xlabel('RA offset (arcsec)')
 
     plt.figure()
     plt.hist(decdiff, bins=150)
-    plt.xlabel('Dec offset (deg)')
+    plt.xlabel('Dec offset (arcsec)')
 
     plt.figure()
     plt.hist(magdiff, bins=150)
