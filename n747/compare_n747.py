@@ -97,14 +97,16 @@ def addTrailingLosses(velocity, seeing, texp=30.0):
     return dmagTrail, dmagDetect
 
 
-def read_JPL_dets(filename='n747_dets_new.txt'):
+def read_JPL_dets(filename):
     jpl = pd.read_table(filename, delim_whitespace=True)
     newcols = jpl.columns.values
     newcols[0] = 'objid'
     jpl.columns = newcols
-    t = Time(jpl['epoch_mjd'], format='mjd', scale='tai')
+    t = Time(jpl['epoch_mjd'], format='mjd', scale='utc')
     jpl['mjdTAI'] = t.tai.mjd
     jpl['mjdUTC'] = t.utc.mjd
+    if 'mag' not in jpl.columns:
+        jpl['mag'] = np.zeros(len(jpl))
     return jpl
 
 def transform_to_S(magV, filters):
@@ -124,7 +126,7 @@ def transform_to_S(magV, filters):
         magFilter[match] = magV[match] - transform[f]
     return magFilter
 
-def read_orbits(orbitfile='S0_n747.des'):
+def read_orbits(orbitfile):
     # Read NEO orbit file
     orbits = pd.read_table(orbitfile, delim_whitespace=True, skiprows=1)
     newcols = orbits.columns.values
@@ -145,7 +147,7 @@ def read_opsim(opsimfile='enigma_1189_sqlite.db'):
     query = 'select distinct(expmjd), finSeeing, filter from summary where night=747'
     opsim = pd.read_sql(query, engine)
     # opsim time TAI, add UTC
-    t = Time(opsim['expMJD'], format='mjd', scale='utc')
+    t = Time(opsim['expMJD'], format='mjd', scale='tai')
     opsim['mjdTAI'] = t.tai.mjd
     opsim['mjdUTC'] = t.utc.mjd
     return opsim
@@ -153,19 +155,19 @@ def read_opsim(opsimfile='enigma_1189_sqlite.db'):
 if __name__ == '__main__':
 
     # read jpl data.
-    jpl = read_JPL_dets('n747_dets_new.txt')
+    jpl = read_JPL_dets('807_nn747.txt')
     # JPL times seem to be TAI, if we assume opsim times are UTC
     # (really opsim should be TAI, and JPL should be TAI, but they don't match)
 
     # read neo orbits
-    orbits = read_orbits('../S0')
+    orbits = read_orbits('S0_n747.des')
     orbits, jpl = trim_orbits(orbits, jpl)
     #orbits.to_csv('S0_trimmed.des', sep=' ', index=False)
 
     # predict neo positions at all times in jpl
     opsim = read_opsim()
 
-    times = jpl.mjdTAI.unique()
+    times = jpl.mjdUTC.unique()
     # For pyoorb, we need to tag times with timescales;
     # 1= MJD_UTC, 2=UT1, 3=TT, 4=TAI
     ephTimes = np.array(zip(times, repeat(1, len(times))), dtype='double')
@@ -186,9 +188,9 @@ if __name__ == '__main__':
     for ephi, time in zip(ephs, times):
         e = pd.DataFrame(ephi)
         e['objid'] = orbits.objid.as_matrix()
-        j = jpl.query('mjdTAI == @time').sort_values('objid')
+        j = jpl.query('mjdUTC == @time').sort_values('objid')
         e = e.query('objid in @j.objid').sort_values('objid')
-        o = opsim.query('abs(mjdTAI - @time) < 0.000001')
+        o = opsim.query('abs(mjdUTC - @time) < 0.000001')
         #print len(o)
         #print time, opsim.iloc[0]
         dmagTrail, dmagDetect = addTrailingLosses(e['velocity'].as_matrix(),
