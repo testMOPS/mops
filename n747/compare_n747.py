@@ -112,8 +112,8 @@ def transform_to_S(magV, filters):
     # https://github.com/testMOPS/mops/commit/1e50ee9a90124107df61c0f2df695c03f4266882
     transform = {'u':-1.77,
                 'g':-0.348,
-                'r':0.21332,
-                'i':0.37317,
+                'r':0.213,#32,
+                'i':0.373, #17,
                 'z':0.349,
                 'y':0.354,
                 'w':0.16}
@@ -166,10 +166,9 @@ if __name__ == '__main__':
     opsim = read_opsim()
 
     times = jpl.mjdTAI.unique()
-    #times = np.array([54466.000000000000 , 54466.000000000000 +1])
     # For pyoorb, we need to tag times with timescales;
     # 1= MJD_UTC, 2=UT1, 3=TT, 4=TAI
-    ephTimes = np.array(zip(times, repeat(3, len(times))), dtype='double')
+    ephTimes = np.array(zip(times, repeat(1, len(times))), dtype='double')
     # Generate ephemerides.
     setup_oorb()
     obscode = 807
@@ -180,6 +179,10 @@ if __name__ == '__main__':
     radiff = []
     decdiff = []
     magdiff = []
+    ra = []
+    dec = []
+    distance = []
+    phase = []
     for ephi, time in zip(ephs, times):
         e = pd.DataFrame(ephi)
         e['objid'] = orbits.objid.as_matrix()
@@ -194,21 +197,27 @@ if __name__ == '__main__':
         radiff += list(e.ra.as_matrix() - j.ra_deg.as_matrix())
         decdiff += list(e.dec.as_matrix() - j.dec_deg.as_matrix())
         magdiff += list(e.mag.as_matrix() - j.mag.as_matrix())
+        ra += list(e.ra.as_matrix())
+        dec += list(e.dec.as_matrix())
+        distance += list(e.delta.as_matrix())
+        phase += list(e.phase.as_matrix())
     radiff = np.array(radiff).ravel()*3600
     decdiff = np.array(decdiff).ravel()*3600
     magdiff = np.array(magdiff).ravel()
-    print radiff.shape
-    print decdiff.shape
+    ra = np.array(ra).ravel()
+    dec = np.array(dec).ravel()
+    distance = np.array(distance).ravel()
+    phase = np.array(phase).ravel()
 
     outfile = open('offsets.txt', 'w')
-    for dra, ddec, dmag, objid, time, f in zip(radiff, decdiff, magdiff,
-                                            jpl['objid'].as_matrix(), jpl['epoch_mjd'].as_matrix(),
-                                            jpl['filter_id'].as_matrix()):
-        print >>outfile, dra, ddec, dmag, objid, time, f
+    for dra, ddec, dmag, r, d, dist, ph, objid, time, f in zip(radiff, decdiff, magdiff,
+                                                               ra, dec, distance, phase,
+                                                               jpl['objid'].as_matrix(), jpl['epoch_mjd'].as_matrix(),
+                                                               jpl['filter_id'].as_matrix()):
+        print >>outfile, dra, ddec, dmag, r, d, dist, ph, objid, time, f
     outfile.close()
 
-    print np.min(radiff)
-
+    print 'ra/dec difference rms (arcsec)', np.std(radiff), np.std(decdiff)
     print 'ra difference min/max (arcsec)', np.min(radiff), np.max(radiff)
     print 'dec difference min/max (arcsec)', np.min(decdiff), np.max(decdiff)
     print 'Vmag difference min/max', np.min(magdiff), np.max(magdiff)
@@ -217,6 +226,17 @@ if __name__ == '__main__':
     plt.plot(radiff, decdiff, 'k.')
     plt.xlabel('RA offsets (arcsec)')
     plt.ylabel('Dec offsets (arcsec)')
+
+    offset = np.sqrt(radiff**2 + decdiff**2)
+    plt.figure()
+    plt.plot(distance, offset, 'k.')
+    plt.xlabel('Distance (AU)')
+    plt.ylabel('abs(offset) (arcsec)')
+
+    plt.figure()
+    plt.plot(phase, offset, 'k.')
+    plt.xlabel('Phase')
+    plt.ylabel('abs(offset) (arcsec)')
 
     plt.figure()
     plt.hist(radiff, bins=150)
@@ -231,4 +251,4 @@ if __name__ == '__main__':
     plt.xlabel('Mag offset')
 
     plt.show()
-    
+

@@ -24,10 +24,10 @@ t = Time(yourtime, format=yourformat, scale=yourtimescale)
 
 print 'UTC: %s' %(t.utc.iso)
 print 'TT ISO: %s' %(t.tt.iso)
-print 'UTC: %f %f' %(t.utc.jd, t.utc.mjd)
-print 'TT: %f %f' %(t.tt.jd, t.tt.mjd)
-print 'TAI: %f %f' %(t.tai.jd, t.tai.mjd)
-print 'TDB: %f %f' %(t.tdb.jd, t.tdb.mjd)
+print 'UTC: %f %.9f' %(t.utc.jd, t.utc.mjd)
+print 'TT: %f %.9f' %(t.tt.jd, t.tt.mjd)
+print 'TAI: %f %.9f' %(t.tai.jd, t.tai.mjd)
+print 'TDB: %f %.9f' %(t.tdb.jd, t.tdb.mjd)
 #print 'UT1: %f %f' %(t.ut1.jd, t.ut1.mjd)
 
 
