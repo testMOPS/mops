@@ -161,7 +161,7 @@ if __name__ == '__main__':
 
     # read neo orbits
     orbits = read_orbits('S0_n747.des')
-    orbits, jpl = trim_orbits(orbits, jpl)
+    #orbits, jpl = trim_orbits(orbits, jpl)
     #orbits.to_csv('S0_trimmed.des', sep=' ', index=False)
 
     # predict neo positions at all times in jpl
@@ -253,4 +253,3 @@ if __name__ == '__main__':
     plt.xlabel('Mag offset')
 
     plt.show()
-
